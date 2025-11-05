@@ -6,8 +6,8 @@ from io import BytesIO
 
 import requests
 
-chattts_service_host = os.environ.get("CHATTTS_SERVICE_HOST", "127.0.0.1")
-chattts_service_port = os.environ.get("CHATTTS_SERVICE_PORT", "9900")
+chattts_service_host = os.environ.get("CHATTTS_SERVICE_HOST") or "127.0.0.1"
+chattts_service_port = os.environ.get("CHATTTS_SERVICE_PORT") or "9900"
 
 CHATTTS_URL = f"http://{chattts_service_host}:{chattts_service_port}/generate_voice"
 
@@ -232,7 +232,7 @@ def main():
             # filename=args.filename
             os.makedirs(tgt, exist_ok=True)
             zip_ref.extractall(tgt)
-            print(f"Extracted files:{tgt}/{filename}")
+            print(f"Extracted files: {tgt}/{args.filename}")
             # print(tgt)
     except requests.exceptions.RequestException as e:
         print(f"Request Error: {e}")

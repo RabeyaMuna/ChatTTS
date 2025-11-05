@@ -38,15 +38,15 @@ class BlockAllocator:
             self.free_blocks.append(block)
 
     def allocate(self) -> PhysicalTokenBlock:
-        if not self.free_blocks:
+        if len(self.free_blocks) == 0:
             raise ValueError("Out of memory! No free blocks are available.")
         block = self.free_blocks.pop()
         block.ref_count = 1
         return block
 
     def free(self, block: PhysicalTokenBlock) -> None:
-        if block.ref_count == 0:
-            raise ValueError(f"Double free! {block} is already freed.")
+        if block.ref_count <= 0:
+            raise ValueError(f"Double free! {block} is already freed or invalid.")
         block.ref_count -= 1
         if block.ref_count == 0:
             self.free_blocks.append(block)
@@ -109,7 +109,7 @@ class BlockSpaceManager:
         num_free_gpu_blocks = self.gpu_allocator.get_num_free_blocks()
 
         # Use watermark to avoid frequent cache eviction.
-        if self.num_total_gpu_blocks - num_required_blocks < self.watermark_blocks:
+        if self.num_total_gpu_blocks - num_required_blocks <= self.watermark_blocks:
             return AllocStatus.NEVER
         if num_free_gpu_blocks - num_required_blocks >= self.watermark_blocks:
             return AllocStatus.OK
