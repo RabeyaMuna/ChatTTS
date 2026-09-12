@@ -1,30 +1,70 @@
+import logging
 import os
 import re
-import logging
 import tempfile
-from dataclasses import dataclass, asdict
-from typing import Literal, Optional, List, Tuple, Dict, Union
+from dataclasses import asdict, dataclass
 from json import load
 from pathlib import Path
+from typing import TYPE_CHECKING, Dict, List, Literal, Optional, Tuple, Union
 
 import numpy as np
 import torch
+from huggingface_hub import snapshot_download
 from vocos import Vocos
 from vocos.pretrained import instantiate_class
-from huggingface_hub import snapshot_download
 
 from .config import Config
-from .model import DVAE, Embed, GPT, gen_logits, Tokenizer, Speaker
-from .utils import (
-    load_safetensors,
-    check_all_assets,
-    download_all_assets,
-    select_device,
-    get_latest_modified_file,
-    del_all,
-)
-from .utils import logger as utils_logger
-from .utils import FileLike
+from .model import DVAE, GPT, Embed, Speaker, Tokenizer, gen_logits
+
+# Defer importing package utils (and its submodules such as utils.dl) until runtime to
+# avoid importing heavy/optional dependencies (e.g. requests) at module import time.
+# Provide lightweight lazy proxies with the same names so rest of module can use them.
+_utils = None
+
+
+def _get_utils():
+    global _utils
+    if _utils is None:
+        import importlib
+
+        pkg = __package__ or "ChatTTS"
+        _utils = importlib.import_module(f"{pkg}.utils")
+    return _utils
+
+
+def _lazy_fn(name):
+    def _fn(*a, **k):
+        return getattr(_get_utils(), name)(*a, **k)
+
+    return _fn
+
+
+# Exported convenience functions (lazy wrappers)
+load_safetensors = _lazy_fn("load_safetensors")
+check_all_assets = _lazy_fn("check_all_assets")
+download_all_assets = _lazy_fn("download_all_assets")
+select_device = _lazy_fn("select_device")
+get_latest_modified_file = _lazy_fn("get_latest_modified_file")
+del_all = _lazy_fn("del_all")
+
+
+# Lazy logger proxy
+class _LazyProxy:
+    def __init__(self, getter):
+        self.__getter = getter
+
+    def __getattr__(self, name):
+        return getattr(self.__getter(), name)
+
+    def __call__(self, *args, **kwargs):
+        return self.__getter()(*args, **kwargs)
+
+
+utils_logger = _LazyProxy(lambda: _get_utils().logger)
+
+if TYPE_CHECKING:
+    # For type checkers only; avoids importing utils at runtime
+    from .utils import FileLike
 
 from .norm import Normalizer
 
@@ -105,7 +145,7 @@ class Chat:
             if download_path is None or force_redownload:
                 self.logger.log(
                     logging.INFO,
-                    f"download from HF: https://huggingface.co/2Noise/ChatTTS",
+                    "download from HF: https://huggingface.co/2Noise/ChatTTS",
                 )
                 try:
                     download_path = snapshot_download(
@@ -306,9 +346,7 @@ class Chat:
                 # Vocos on mps will crash, use cpu fallback.
                 # Plus, complex dtype used in the decode process of Vocos is not supported in torch_npu now,
                 # so we put this calculation of data on CPU instead of NPU.
-                "cpu"
-                if "mps" in str(device) or "npu" in str(device)
-                else device
+                "cpu" if "mps" in str(device) or "npu" in str(device) else device
             )
             .eval()
         )
@@ -398,7 +436,6 @@ class Chat:
         params_refine_text=RefineTextParams(),
         params_infer_code=InferCodeParams(),
     ):
-
         assert self.has_loaded(use_decoder=use_decoder)
 
         if not isinstance(text, list):
@@ -547,7 +584,6 @@ class Chat:
         return_hidden: bool,
         params: InferCodeParams,
     ):
-
         gpt = self.gpt
 
         if not isinstance(text, list):
@@ -668,7 +704,6 @@ class Chat:
         device: torch.device,
         params: RefineTextParams,
     ):
-
         gpt = self.gpt
 
         if not isinstance(text, list):

@@ -1,4 +1,5 @@
-import os, sys
+import os
+import sys
 
 if sys.platform == "darwin":
     os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
@@ -8,7 +9,13 @@ sys.path.append(now_dir)
 
 import logging
 
-import ChatTTS
+try:
+    import ChatTTS
+except Exception:
+    ChatTTS = None
+    logging.getLogger(__name__).warning(
+        "ChatTTS package not available; skipping tests that require it"
+    )
 
 from tools.logger import get_logger
 

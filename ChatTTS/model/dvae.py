@@ -1,5 +1,5 @@
 import math
-from typing import List, Optional, Literal, Union
+from typing import List, Literal, Optional, Union
 
 import numpy as np
 import pybase16384 as b14
@@ -8,7 +8,8 @@ import torch.nn as nn
 import torchaudio
 from vector_quantize_pytorch import GroupedResidualFSQ
 
-from ..utils import load_safetensors
+# Import load_safetensors lazily inside functions/methods that need it to avoid
+# importing ChatTTS.utils (which may import requests) at module import time.
 
 
 class ConvNeXtBlock(nn.Module):
@@ -67,7 +68,6 @@ class ConvNeXtBlock(nn.Module):
 
 
 class GFSQ(nn.Module):
-
     def __init__(
         self, dim: int, levels: List[int], G: int, R: int, eps=1e-5, transpose=True
     ):

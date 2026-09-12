@@ -1,10 +1,9 @@
-import os
-from pathlib import Path
 import hashlib
-import requests
+import os
 from io import BytesIO
-from typing import Dict, Tuple, Optional
-from mmap import mmap, ACCESS_READ
+from mmap import ACCESS_READ, mmap
+from pathlib import Path
+from typing import Dict, Optional, Tuple
 
 from .log import logger
 
@@ -121,7 +120,7 @@ def download_and_extract_tar_gz(
     with BytesIO() as out_file:
         out_file.write(response.content)
         out_file.seek(0)
-        logger.get_logger().info(f"downloaded.")
+        logger.get_logger().info("downloaded.")
         with tarfile.open(fileobj=out_file, mode="r:gz") as tar:
             tar.extractall(folder)
         logger.get_logger().info(f"extracted into {folder}")
@@ -137,7 +136,7 @@ def download_and_extract_zip(
     with BytesIO() as out_file:
         out_file.write(response.content)
         out_file.seek(0)
-        logger.get_logger().info(f"downloaded.")
+        logger.get_logger().info("downloaded.")
         with zipfile.ZipFile(out_file) as zip_ref:
             zip_ref.extractall(folder)
         logger.get_logger().info(f"extracted into {folder}")
@@ -152,8 +151,8 @@ def download_dns_yaml(url: str, folder: str, headers: Dict[str, str]):
 
 
 def download_all_assets(tmpdir: str, homedir: str, version="0.2.10"):
-    import subprocess
     import platform
+    import subprocess
 
     archs = {
         "aarch64": "arm64",
