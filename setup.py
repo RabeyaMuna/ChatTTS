@@ -28,6 +28,7 @@ setup(
         "transformers>=4.41.1",
         "vector_quantize_pytorch",
         "vocos",
+        "requests>=2.31.0",
     ],
     platforms="any",
     classifiers=[
