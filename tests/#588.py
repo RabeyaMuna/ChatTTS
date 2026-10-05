@@ -25,13 +25,18 @@ texts = [
 
 fail = False
 
-refined = chat.infer(
-    texts,
-    refine_text_only=True,
-    stream=False,
-    split_text=False,
-    params_refine_text=ChatTTS.Chat.RefineTextParams(show_tqdm=False),
-)
+try:
+    refined = chat.infer(
+        texts,
+        refine_text_only=True,
+        stream=False,
+        split_text=False,
+        params_refine_text=ChatTTS.Chat.RefineTextParams(show_tqdm=False),
+    )
+except RuntimeError as e:
+    logger.warning("infer failed: %s", e)
+    fail = True
+    refined = []
 
 trimre = re.compile("\\[[\w_]+\\]")
 

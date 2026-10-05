@@ -641,7 +641,7 @@ class Chat:
         result = gpt.generate(
             emb,
             input_ids,
-            temperature=torch.tensor(temperature, device=device),
+            temperature=torch.tensor(temperature, device=self.device_gpt),
             eos_token=num_code,
             attention_mask=attention_mask,
             max_new_token=params.max_new_token,

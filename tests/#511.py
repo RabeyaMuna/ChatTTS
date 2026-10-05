@@ -38,12 +38,17 @@ params_infer_code = ChatTTS.Chat.InferCodeParams(
 
 fail = False
 
-wavs = chat.infer(
-    texts,
-    skip_refine_text=True,
-    split_text=False,
-    params_infer_code=params_infer_code,
-)
+try:
+    wavs = chat.infer(
+        texts,
+        skip_refine_text=True,
+        split_text=False,
+        params_infer_code=params_infer_code,
+    )
+except RuntimeError as e:
+    logger.warning("infer failed: %s", e)
+    fail = True
+    wavs = []
 
 for k, wav in enumerate(wavs):
     if wav is None:

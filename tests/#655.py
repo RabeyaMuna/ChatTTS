@@ -73,16 +73,21 @@ with torch.inference_mode():
         input_ids.shape[0], device=input_ids.device, dtype=torch.long
     ).fill_(input_ids.shape[1])
 
-    recoded_text = chat.tokenizer.decode(
-        chat.gpt._prepare_generation_outputs(
-            input_ids,
-            start_idx,
-            end_idx,
-            [],
-            [],
-            True,
-        ).ids
-    )
+    try:
+        recoded_text = chat.tokenizer.decode(
+            chat.gpt._prepare_generation_outputs(
+                input_ids,
+                start_idx,
+                end_idx,
+                [],
+                [],
+                True,
+            ).ids
+        )
+    except RuntimeError as e:
+        logger.warning("prepare_generation_outputs failed: %s", e)
+        fail = True
+        recoded_text = [""]
 
 if (
     recoded_text[0]

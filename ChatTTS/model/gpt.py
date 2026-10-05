@@ -212,13 +212,14 @@ class GPT(nn.Module):
                 and attention_mask.shape[1] > input_ids.shape[1]
             ):
                 start = attention_mask.shape[1] - past_length
-                input_ids = input_ids.narrow(1, -start, start)
+                if start > 0:
+                    input_ids = input_ids.narrow(1, -start, start)
             # 2 - If the past_length is smaller than input_ids', then input_ids holds all input tokens. We can discard
             # input_ids based on the past_length.
             elif past_length < input_ids.shape[1]:
-                input_ids = input_ids.narrow(
-                    1, past_length, input_ids.size(1) - past_length
-                )
+                length = input_ids.size(1) - past_length
+                if length > 0:
+                    input_ids = input_ids.narrow(1, past_length, length)
             # 3 - Otherwise (past_length >= input_ids.shape[1]), let's assume input_ids only has unprocessed tokens.
 
             # If we are about to go beyond the maximum cache length, we need to crop the input attention mask.
@@ -227,15 +228,16 @@ class GPT(nn.Module):
                 and attention_mask is not None
                 and cache_length + input_ids.shape[1] > max_cache_length
             ):
-                attention_mask = attention_mask.narrow(
-                    1, -max_cache_length, max_cache_length
-                )
+                if max_cache_length > 0:
+                    attention_mask = attention_mask.narrow(
+                        1, -max_cache_length, max_cache_length
+                    )
 
         if attention_mask is not None and position_ids is None:
             # create position_ids on the fly for batch generation
             position_ids = attention_mask.long().cumsum(-1) - 1
             position_ids.masked_fill_(attention_mask.eq(0), 1)
-            if past_key_values:
+            if past_key_values and input_ids.shape[1] > 0:
                 position_ids = position_ids.narrow(
                     1, -input_ids.shape[1], input_ids.shape[1]
                 )
@@ -248,7 +250,8 @@ class GPT(nn.Module):
                 past_length, past_length + input_length, device=input_ids.device
             )
         else:
-            cache_position = cache_position.narrow(0, -input_length, input_length)
+            if input_length > 0:
+                cache_position = cache_position.narrow(0, -input_length, input_length)
 
         if has_static_cache:
             past_key_values = None
@@ -571,7 +574,8 @@ class GPT(nn.Module):
 
             del idx_next
             progress += 1
-            inputs_ids = inputs_ids_buf.narrow(1, 0, progress)
+            if progress > 0:
+                inputs_ids = inputs_ids_buf.narrow(1, 0, progress)
 
             not_finished = finish.logical_not().to(end_idx.device)
             end_idx.add_(not_finished.int())
