@@ -1,15 +1,15 @@
-import platform
-from dataclasses import dataclass
-import logging
-from typing import Union, List, Optional, Tuple, Callable
 import gc
+import logging
+import platform
+from collections.abc import Callable
+from dataclasses import dataclass
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.utils.parametrize as P
+from torch import nn
 from tqdm import tqdm
-from transformers import LlamaModel, LlamaConfig
+from transformers import LlamaConfig, LlamaModel
 from transformers.cache_utils import Cache
 from transformers.modeling_outputs import BaseModelOutputWithPast
 from transformers.utils import is_flash_attn_2_available
@@ -60,7 +60,6 @@ class GPT(nn.Module):
         self, gpt_folder: str, embed_file_path: str, experimental=False
     ):
         if self.is_vllm and platform.system().lower() == "linux":
-
             from .velocity import LLM
 
             self.llm = LLM(
@@ -113,7 +112,7 @@ class GPT(nn.Module):
     def _build_llama_config(
         self,
         config: dict,
-    ) -> Tuple[LlamaModel, LlamaConfig]:
+    ) -> tuple[LlamaModel, LlamaConfig]:
 
         if self.use_flash_attn and is_flash_attn_2_available():
             llama_config = LlamaConfig(
@@ -143,10 +142,10 @@ class GPT(nn.Module):
         position_ids: torch.Tensor
         cache_position: torch.Tensor
         use_cache: bool
-        input_ids: Optional[torch.Tensor] = None
-        past_key_values: Optional[Tuple[Tuple[torch.FloatTensor]]] = None
-        attention_mask: Optional[torch.Tensor] = None
-        inputs_embeds: Optional[torch.Tensor] = None
+        input_ids: torch.Tensor | None = None
+        past_key_values: tuple[tuple[torch.FloatTensor]] | None = None
+        attention_mask: torch.Tensor | None = None
+        inputs_embeds: torch.Tensor | None = None
 
         def to(self, device: torch.device, dtype: torch.dtype):
             if self.attention_mask is not None:
@@ -162,11 +161,11 @@ class GPT(nn.Module):
     def _prepare_generation_inputs(
         self,
         input_ids: torch.Tensor,
-        past_key_values: Optional[Tuple[Tuple[torch.FloatTensor]]] = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        inputs_embeds: Optional[torch.Tensor] = None,
-        cache_position: Optional[torch.Tensor] = None,
-        position_ids: Optional[torch.Tensor] = None,
+        past_key_values: tuple[tuple[torch.FloatTensor]] | None = None,
+        attention_mask: torch.Tensor | None = None,
+        inputs_embeds: torch.Tensor | None = None,
+        cache_position: torch.Tensor | None = None,
+        position_ids: torch.Tensor | None = None,
         use_cache=True,
     ) -> _GenerationInputs:
         # With static cache, the `past_key_values` is None
@@ -216,9 +215,8 @@ class GPT(nn.Module):
             # 2 - If the past_length is smaller than input_ids', then input_ids holds all input tokens. We can discard
             # input_ids based on the past_length.
             elif past_length < input_ids.shape[1]:
-                input_ids = input_ids.narrow(
-                    1, past_length, input_ids.size(1) - past_length
-                )
+                length = max(0, input_ids.size(1) - past_length)
+                input_ids = input_ids.narrow(1, past_length, length)
             # 3 - Otherwise (past_length >= input_ids.shape[1]), let's assume input_ids only has unprocessed tokens.
 
             # If we are about to go beyond the maximum cache length, we need to crop the input attention mask.
@@ -227,9 +225,8 @@ class GPT(nn.Module):
                 and attention_mask is not None
                 and cache_length + input_ids.shape[1] > max_cache_length
             ):
-                attention_mask = attention_mask.narrow(
-                    1, -max_cache_length, max_cache_length
-                )
+                start_idx = max(0, attention_mask.shape[1] - max_cache_length)
+                attention_mask = attention_mask.narrow(1, start_idx, max_cache_length)
 
         if attention_mask is not None and position_ids is None:
             # create position_ids on the fly for batch generation
@@ -275,9 +272,9 @@ class GPT(nn.Module):
 
     @dataclass(repr=False, eq=False)
     class GenerationOutputs:
-        ids: List[torch.Tensor]
-        attentions: List[Optional[Tuple[torch.FloatTensor, ...]]]
-        hiddens: List[torch.Tensor]
+        ids: list[torch.Tensor]
+        attentions: list[tuple[torch.FloatTensor, ...] | None]
+        hiddens: list[torch.Tensor]
 
         def destroy(self):
             del_all(self.ids)
@@ -290,8 +287,8 @@ class GPT(nn.Module):
         inputs_ids: torch.Tensor,
         start_idx: int,
         end_idx: torch.Tensor,
-        attentions: List[Optional[Tuple[torch.FloatTensor, ...]]],
-        hiddens: List[torch.Tensor],
+        attentions: list[tuple[torch.FloatTensor, ...] | None],
+        hiddens: list[torch.Tensor],
         infer_text: bool,
     ) -> GenerationOutputs:
         inputs_ids = [
@@ -318,11 +315,11 @@ class GPT(nn.Module):
         emb: torch.Tensor,
         inputs_ids: torch.Tensor,
         temperature: torch.Tensor,
-        eos_token: Union[int, torch.Tensor],
-        attention_mask: Optional[torch.Tensor] = None,
+        eos_token: int | torch.Tensor,
+        attention_mask: torch.Tensor | None = None,
         max_new_token=2048,
         min_new_token=0,
-        logits_processors: Tuple[
+        logits_processors: tuple[
             Callable[[torch.LongTensor, torch.FloatTensor], torch.FloatTensor]
         ] = (),
         infer_text=False,
@@ -332,16 +329,19 @@ class GPT(nn.Module):
         show_tqdm=True,
         ensure_non_empty=True,
         stream_batch=24,
-        manual_seed: Optional[int] = None,
+        manual_seed: int | None = None,
         context=Context(),
     ):
 
-        attentions: List[Optional[Tuple[torch.FloatTensor, ...]]] = []
+        attentions: list[tuple[torch.FloatTensor, ...] | None] = []
         hiddens = []
         stream_iter = 0
 
-        start_idx, end_idx = inputs_ids.shape[1], torch.zeros(
-            inputs_ids.shape[0], device=inputs_ids.device, dtype=torch.long
+        start_idx, end_idx = (
+            inputs_ids.shape[1],
+            torch.zeros(
+                inputs_ids.shape[0], device=inputs_ids.device, dtype=torch.long
+            ),
         )
         finish = torch.zeros(inputs_ids.shape[0], device=inputs_ids.device).bool()
 
@@ -376,11 +376,12 @@ class GPT(nn.Module):
             dtype=inputs_ids.dtype,
             device=inputs_ids.device,
         )
-        inputs_ids_buf.narrow(1, 0, progress).copy_(inputs_ids)
+        length = max(0, progress)
+        inputs_ids_buf.narrow(1, 0, length).copy_(inputs_ids)
         del inputs_ids
-        inputs_ids = inputs_ids_buf.narrow(1, 0, progress)
+        inputs_ids = inputs_ids_buf.narrow(1, 0, length)
 
-        pbar: Optional[tqdm] = None
+        pbar: tqdm | None = None
 
         if show_tqdm:
             pbar = tqdm(
@@ -392,7 +393,6 @@ class GPT(nn.Module):
         past_key_values = None
 
         for i in range(max_new_token):
-
             model_input = self._prepare_generation_inputs(
                 inputs_ids,
                 past_key_values,
@@ -463,10 +463,11 @@ class GPT(nn.Module):
                 logits = logits.permute(0, 2, 1)
                 logits = logits.reshape(-1, logits.size(2))
                 # logits_token = rearrange(inputs_ids[:, start_idx:], "b c n -> (b n) c")
+                length = max(0, inputs_ids.size(1) - start_idx)
                 inputs_ids_sliced = inputs_ids.narrow(
                     1,
                     start_idx,
-                    inputs_ids.size(1) - start_idx,
+                    length,
                 ).permute(0, 2, 1)
                 logits_token = inputs_ids_sliced.reshape(
                     inputs_ids_sliced.size(0) * inputs_ids_sliced.size(1),
@@ -474,11 +475,12 @@ class GPT(nn.Module):
                 ).to(self.device)
                 del inputs_ids_sliced
             else:
+                length = max(0, inputs_ids.size(1) - start_idx)
                 logits_token = (
                     inputs_ids.narrow(
                         1,
                         start_idx,
-                        inputs_ids.size(1) - start_idx,
+                        length,
                     )
                     .narrow(2, 0, 1)
                     .to(self.device)
