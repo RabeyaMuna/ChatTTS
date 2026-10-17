@@ -1,4 +1,5 @@
-import os, sys
+import os
+import sys
 
 if sys.platform == "darwin":
     os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
@@ -69,9 +70,10 @@ input_ids, attention_mask, text_mask = chat.tokenizer.encode(
     device=chat.device_gpt,
 )
 with torch.inference_mode():
-    start_idx, end_idx = 0, torch.zeros(
+    start_idx = torch.zeros(
         input_ids.shape[0], device=input_ids.device, dtype=torch.long
-    ).fill_(input_ids.shape[1])
+    )
+    end_idx = torch.full_like(start_idx, input_ids.shape[1])
 
     recoded_text = chat.tokenizer.decode(
         chat.gpt._prepare_generation_outputs(
@@ -89,7 +91,7 @@ if (
     != "[Stts] [spk_emb] [speed_5] what is [uv_break] your favorite english food? [laugh] [lbreak] [Ptts]"
 ):
     fail = True
-    logger.warning("recoded text is '%s'", refined_text)
+    logger.warning("recoded text is '%s'", recoded_text)
 
 if fail:
     import sys

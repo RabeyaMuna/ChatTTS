@@ -1,4 +1,5 @@
-import os, sys
+import os
+import sys
 
 if sys.platform == "darwin":
     os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
@@ -43,6 +44,7 @@ wavs = chat.infer(
     skip_refine_text=True,
     split_text=False,
     params_infer_code=params_infer_code,
+    use_decoder=True,
 )
 
 for k, wav in enumerate(wavs):
@@ -53,4 +55,5 @@ for k, wav in enumerate(wavs):
 if fail:
     import sys
 
+    logger.error("Test failed due to None values in wavs")
     sys.exit(1)

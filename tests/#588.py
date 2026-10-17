@@ -1,4 +1,5 @@
-import os, sys
+import os
+import sys
 
 if sys.platform == "darwin":
     os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
@@ -31,6 +32,7 @@ refined = chat.infer(
     stream=False,
     split_text=False,
     params_refine_text=ChatTTS.Chat.RefineTextParams(show_tqdm=False),
+    skip_refine_text=False,
 )
 
 trimre = re.compile("\\[[\w_]+\\]")
@@ -49,4 +51,5 @@ for i, t in enumerate(refined):
 if fail:
     import sys
 
+    logger.error("Test failed due to mismatch between original and refined text.")
     sys.exit(1)
