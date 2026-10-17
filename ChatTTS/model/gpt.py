@@ -1,15 +1,15 @@
+import gc
+import logging
 import platform
 from dataclasses import dataclass
-import logging
-from typing import Union, List, Optional, Tuple, Callable
-import gc
+from typing import Callable, List, Optional, Tuple, Union
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.utils.parametrize as P
 from tqdm import tqdm
-from transformers import LlamaModel, LlamaConfig
+from transformers import LlamaConfig, LlamaModel
 from transformers.cache_utils import Cache
 from transformers.modeling_outputs import BaseModelOutputWithPast
 from transformers.utils import is_flash_attn_2_available
@@ -60,7 +60,6 @@ class GPT(nn.Module):
         self, gpt_folder: str, embed_file_path: str, experimental=False
     ):
         if self.is_vllm and platform.system().lower() == "linux":
-
             from .velocity import LLM
 
             self.llm = LLM(
@@ -114,7 +113,6 @@ class GPT(nn.Module):
         self,
         config: dict,
     ) -> Tuple[LlamaModel, LlamaConfig]:
-
         if self.use_flash_attn and is_flash_attn_2_available():
             llama_config = LlamaConfig(
                 **config,
@@ -216,9 +214,17 @@ class GPT(nn.Module):
             # 2 - If the past_length is smaller than input_ids', then input_ids holds all input tokens. We can discard
             # input_ids based on the past_length.
             elif past_length < input_ids.shape[1]:
-                input_ids = input_ids.narrow(
-                    1, past_length, input_ids.size(1) - past_length
-                )
+                new_length = input_ids.size(1) - past_length
+                if new_length > 0:
+                    input_ids = input_ids.narrow(1, past_length, new_length)
+                else:
+                    # If no new tokens, we should handle this case appropriately
+                    # For example, create an empty tensor with the same device and dtype
+                    input_ids = torch.empty(
+                        (input_ids.size(0), 0),
+                        dtype=input_ids.dtype,
+                        device=input_ids.device,
+                    )
             # 3 - Otherwise (past_length >= input_ids.shape[1]), let's assume input_ids only has unprocessed tokens.
 
             # If we are about to go beyond the maximum cache length, we need to crop the input attention mask.
@@ -335,13 +341,15 @@ class GPT(nn.Module):
         manual_seed: Optional[int] = None,
         context=Context(),
     ):
-
         attentions: List[Optional[Tuple[torch.FloatTensor, ...]]] = []
         hiddens = []
         stream_iter = 0
 
-        start_idx, end_idx = inputs_ids.shape[1], torch.zeros(
-            inputs_ids.shape[0], device=inputs_ids.device, dtype=torch.long
+        start_idx, end_idx = (
+            inputs_ids.shape[1],
+            torch.zeros(
+                inputs_ids.shape[0], device=inputs_ids.device, dtype=torch.long
+            ),
         )
         finish = torch.zeros(inputs_ids.shape[0], device=inputs_ids.device).bool()
 
@@ -392,7 +400,6 @@ class GPT(nn.Module):
         past_key_values = None
 
         for i in range(max_new_token):
-
             model_input = self._prepare_generation_inputs(
                 inputs_ids,
                 past_key_values,

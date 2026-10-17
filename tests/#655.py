@@ -1,4 +1,5 @@
-import os, sys
+import os
+import sys
 
 if sys.platform == "darwin":
     os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
@@ -11,7 +12,6 @@ import logging
 import torch
 
 import ChatTTS
-
 from tools.logger import get_logger
 from tools.normalizer import normalizer_en_nemo_text
 
@@ -38,7 +38,7 @@ refined_text = chat.infer(
         prompt="[oral_2][laugh_0][break_6]",
         manual_seed=12345,
     ),
-    split_text=False,
+    split_text=True,
 )
 if (
     refined_text[0]
@@ -69,9 +69,12 @@ input_ids, attention_mask, text_mask = chat.tokenizer.encode(
     device=chat.device_gpt,
 )
 with torch.inference_mode():
-    start_idx, end_idx = 0, torch.zeros(
-        input_ids.shape[0], device=input_ids.device, dtype=torch.long
-    ).fill_(input_ids.shape[1])
+    start_idx, end_idx = (
+        0,
+        torch.zeros(
+            input_ids.shape[0], device=input_ids.device, dtype=torch.long
+        ).fill_(input_ids.shape[1]),
+    )
 
     recoded_text = chat.tokenizer.decode(
         chat.gpt._prepare_generation_outputs(
@@ -89,7 +92,7 @@ if (
     != "[Stts] [spk_emb] [speed_5] what is [uv_break] your favorite english food? [laugh] [lbreak] [Ptts]"
 ):
     fail = True
-    logger.warning("recoded text is '%s'", refined_text)
+    logger.warning("recoded text is '%s'", recoded_text)
 
 if fail:
     import sys
