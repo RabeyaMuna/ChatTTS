@@ -1,4 +1,5 @@
-import os, sys
+import os
+import sys
 
 if sys.platform == "darwin":
     os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
@@ -41,7 +42,7 @@ fail = False
 wavs = chat.infer(
     texts,
     skip_refine_text=True,
-    split_text=False,
+    split_text=True,
     params_infer_code=params_infer_code,
 )
 

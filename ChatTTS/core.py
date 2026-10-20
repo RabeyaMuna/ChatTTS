@@ -105,7 +105,7 @@ class Chat:
             if download_path is None or force_redownload:
                 self.logger.log(
                     logging.INFO,
-                    f"download from HF: https://huggingface.co/2Noise/ChatTTS",
+                    "download from HF: https://huggingface.co/2Noise/ChatTTS",
                 )
                 try:
                     download_path = snapshot_download(
@@ -305,9 +305,7 @@ class Chat:
                 # Vocos on mps will crash, use cpu fallback.
                 # Plus, complex dtype used in the decode process of Vocos is not supported in torch_npu now,
                 # so we put this calculation of data on CPU instead of NPU.
-                "cpu"
-                if "mps" in str(device) or "npu" in str(device)
-                else device
+                "cpu" if "mps" in str(device) or "npu" in str(device) else device
             )
             .eval()
         )
@@ -397,7 +395,6 @@ class Chat:
         params_refine_text=RefineTextParams(),
         params_infer_code=InferCodeParams(),
     ):
-
         assert self.has_loaded(use_decoder=use_decoder)
 
         if not isinstance(text, list):
@@ -515,19 +512,20 @@ class Chat:
         use_decoder: bool,
     ):
         decoder = self.decoder if use_decoder else self.dvae
-        max_x_len = -1
         if len(result_list) == 0:
             return np.array([], dtype=np.float32)
-        for result in result_list:
-            if result.size(0) > max_x_len:
-                max_x_len = result.size(0)
+        # Filter out empty tensors to avoid narrow() with negative length
+        valid_results = [r for r in result_list if r.size(0) > 0]
+        if len(valid_results) == 0:
+            return np.array([], dtype=np.float32)
+        max_x_len = max(r.size(0) for r in valid_results)
         batch_result = torch.zeros(
-            (len(result_list), result_list[0].size(1), max_x_len),
-            dtype=result_list[0].dtype,
-            device=result_list[0].device,
+            (len(valid_results), valid_results[0].size(1), max_x_len),
+            dtype=valid_results[0].dtype,
+            device=valid_results[0].device,
         )
-        for i in range(len(result_list)):
-            src = result_list[i]
+        for i in range(len(valid_results)):
+            src = valid_results[i]
             batch_result[i].narrow(1, 0, src.size(0)).copy_(src.permute(1, 0))
             del src
         del_all(result_list)
@@ -546,7 +544,6 @@ class Chat:
         return_hidden: bool,
         params: InferCodeParams,
     ):
-
         gpt = self.gpt
 
         if not isinstance(text, list):
@@ -667,7 +664,6 @@ class Chat:
         device: torch.device,
         params: RefineTextParams,
     ):
-
         gpt = self.gpt
 
         if not isinstance(text, list):

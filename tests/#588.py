@@ -1,4 +1,5 @@
-import os, sys
+import os
+import sys
 
 if sys.platform == "darwin":
     os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
@@ -29,7 +30,7 @@ refined = chat.infer(
     texts,
     refine_text_only=True,
     stream=False,
-    split_text=False,
+    split_text=True,
     params_refine_text=ChatTTS.Chat.RefineTextParams(show_tqdm=False),
 )
 

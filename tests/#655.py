@@ -1,4 +1,5 @@
-import os, sys
+import os
+import sys
 
 if sys.platform == "darwin":
     os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
@@ -52,6 +53,7 @@ params = ChatTTS.Chat.InferCodeParams(
     temperature=0.3,  # using custom temperature
     top_P=0.7,  # top P decode
     top_K=20,  # top K decode
+    text=refined_text,  # provide the refined text to avoid empty input
 )
 input_ids, attention_mask, text_mask = chat.tokenizer.encode(
     chat.speaker.decorate_code_prompts(
@@ -69,9 +71,12 @@ input_ids, attention_mask, text_mask = chat.tokenizer.encode(
     device=chat.device_gpt,
 )
 with torch.inference_mode():
-    start_idx, end_idx = 0, torch.zeros(
-        input_ids.shape[0], device=input_ids.device, dtype=torch.long
-    ).fill_(input_ids.shape[1])
+    start_idx, end_idx = (
+        0,
+        torch.zeros(
+            input_ids.shape[0], device=input_ids.device, dtype=torch.long
+        ).fill_(input_ids.shape[1]),
+    )
 
     recoded_text = chat.tokenizer.decode(
         chat.gpt._prepare_generation_outputs(
