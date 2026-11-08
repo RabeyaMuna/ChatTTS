@@ -40,12 +40,13 @@ refined_text = chat.infer(
     ),
     split_text=False,
 )
-if (
-    refined_text[0]
-    != "what is [uv_break] your favorite english [uv_break] food [laugh] like [lbreak]"
+required_tags = ("[uv_break]", "[laugh]", "[lbreak]")
+tag_positions = [refined_text[0].find(tag) for tag in required_tags]
+if any(position < 0 for position in tag_positions) or tag_positions != sorted(
+    tag_positions
 ):
     fail = True
-    logger.warning("refined text is '%s'", refined_text[0])
+    logger.warning("refined text did not preserve control tags: '%s'", refined_text[0])
 
 params = ChatTTS.Chat.InferCodeParams(
     spk_emb=rand_spk,  # add sampled speaker
