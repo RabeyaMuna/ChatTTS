@@ -528,7 +528,7 @@ class Chat:
         )
         for i in range(len(result_list)):
             src = result_list[i]
-            batch_result[i].narrow(1, 0, src.size(0)).copy_(src.permute(1, 0))
+            batch_result[i].narrow(1, 0, max(0, src.size(0))).copy_(src.permute(1, 0))
             del src
         del_all(result_list)
         mel_specs = decoder(batch_result)
@@ -672,6 +672,11 @@ class Chat:
 
         if not isinstance(text, list):
             text = [text]
+
+        if params.max_new_token < 0:
+            params.max_new_token = 0
+        if params.min_new_token < 0:
+            params.min_new_token = 0
 
         input_ids, attention_mask, text_mask = self.tokenizer.encode(
             self.speaker.decorate_text_prompts(text, params.prompt),
