@@ -8,6 +8,7 @@ sys.path.append(now_dir)
 
 import logging
 import re
+import requests
 
 import ChatTTS
 
