@@ -1,32 +1,31 @@
+import logging
 import os
 import re
-import logging
 import tempfile
-from dataclasses import dataclass, asdict
-from typing import Literal, Optional, List, Tuple, Dict, Union
+from dataclasses import asdict, dataclass
 from json import load
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 import torch
+from huggingface_hub import snapshot_download
 from vocos import Vocos
 from vocos.pretrained import instantiate_class
-from huggingface_hub import snapshot_download
 
 from .config import Config
-from .model import DVAE, Embed, GPT, gen_logits, Tokenizer, Speaker
+from .model import DVAE, GPT, Embed, Speaker, Tokenizer, gen_logits
+from .norm import Normalizer
 from .utils import (
-    load_safetensors,
+    FileLike,
     check_all_assets,
-    download_all_assets,
-    select_device,
-    get_latest_modified_file,
     del_all,
+    download_all_assets,
+    get_latest_modified_file,
+    load_safetensors,
+    select_device,
 )
 from .utils import logger as utils_logger
-from .utils import FileLike
-
-from .norm import Normalizer
 
 
 class Chat:
@@ -43,7 +42,7 @@ class Chat:
         with open(
             os.path.join(os.path.dirname(__file__), "res", "sha256_map.json")
         ) as f:
-            self.sha256_map: Dict[str, str] = load(f)
+            self.sha256_map: dict[str, str] = load(f)
 
         self.context = GPT.Context()
 
@@ -67,8 +66,8 @@ class Chat:
         self,
         source: Literal["huggingface", "local", "custom"] = "local",
         force_redownload=False,
-        custom_path: Optional[FileLike] = None,
-    ) -> Optional[str]:
+        custom_path: FileLike | None = None,
+    ) -> str | None:
         if source == "local":
             download_path = custom_path if custom_path is not None else os.getcwd()
             if (
@@ -105,7 +104,7 @@ class Chat:
             if download_path is None or force_redownload:
                 self.logger.log(
                     logging.INFO,
-                    f"download from HF: https://huggingface.co/2Noise/ChatTTS",
+                    "download from HF: https://huggingface.co/2Noise/ChatTTS",
                 )
                 try:
                     download_path = snapshot_download(
@@ -139,9 +138,9 @@ class Chat:
         source: Literal["huggingface", "local", "custom"] = "local",
         force_redownload=False,
         compile: bool = False,
-        custom_path: Optional[FileLike] = None,
-        device: Optional[torch.device] = None,
-        coef: Optional[torch.Tensor] = None,
+        custom_path: FileLike | None = None,
+        device: torch.device | None = None,
+        coef: torch.Tensor | None = None,
         use_flash_attn=False,
         use_vllm=False,
         experimental: bool = False,
@@ -176,7 +175,7 @@ class Chat:
     def sample_random_speaker(self) -> str:
         return self.speaker.sample_random()
 
-    def sample_audio_speaker(self, wav: Union[np.ndarray, torch.Tensor]) -> str:
+    def sample_audio_speaker(self, wav: np.ndarray | torch.Tensor) -> str:
         return self.speaker.encode_prompt(self.dvae.sample_audio(wav))
 
     @dataclass(repr=False, eq=False)
@@ -190,14 +189,14 @@ class Chat:
         min_new_token: int = 0
         show_tqdm: bool = True
         ensure_non_empty: bool = True
-        manual_seed: Optional[int] = None
+        manual_seed: int | None = None
 
     @dataclass(repr=False, eq=False)
     class InferCodeParams(RefineTextParams):
         prompt: str = "[speed_5]"
-        spk_emb: Optional[str] = None
-        spk_smp: Optional[str] = None
-        txt_smp: Optional[str] = None
+        spk_emb: str | None = None
+        spk_smp: str | None = None
+        txt_smp: str | None = None
         temperature: float = 0.3
         repetition_penalty: float = 1.05
         max_new_token: int = 2048
@@ -222,6 +221,13 @@ class Chat:
     ):
         self.context.set(False)
 
+        if (
+            not text
+            or (isinstance(text, str) and not text.strip())
+            or (isinstance(text, list) and all(not t.strip() for t in text))
+        ):
+            return []
+
         if split_text and isinstance(text, str):
             if "\n" in text:
                 text = text.split("\n")
@@ -230,7 +236,7 @@ class Chat:
                 nt = []
                 if isinstance(text, list):
                     for t in text:
-                        if t:
+                        if t and t.strip():
                             nt.append(t)
                     text = nt
                 else:
@@ -280,9 +286,9 @@ class Chat:
         embed_path: str = None,
         decoder_ckpt_path: str = None,
         tokenizer_path: str = None,
-        device: Optional[torch.device] = None,
+        device: torch.device | None = None,
         compile: bool = False,
-        coef: Optional[str] = None,
+        coef: str | None = None,
         use_flash_attn=False,
         use_vllm=False,
         experimental: bool = False,
@@ -305,9 +311,7 @@ class Chat:
                 # Vocos on mps will crash, use cpu fallback.
                 # Plus, complex dtype used in the decode process of Vocos is not supported in torch_npu now,
                 # so we put this calculation of data on CPU instead of NPU.
-                "cpu"
-                if "mps" in str(device) or "npu" in str(device)
-                else device
+                "cpu" if "mps" in str(device) or "npu" in str(device) else device
             )
             .eval()
         )
@@ -384,7 +388,7 @@ class Chat:
 
     def _infer(
         self,
-        text: Union[List[str], str],
+        text: list[str] | str,
         stream=False,
         lang=None,
         skip_refine_text=False,
@@ -447,7 +451,7 @@ class Chat:
                 use_decoder,
             )
             result.destroy()
-            assert len(wavs), 1
+            assert len(wavs) == 1
             params_infer_code.spk_smp = self.sample_audio_speaker(wavs[0])
             params_infer_code.txt_smp = refer_text
 
@@ -489,8 +493,7 @@ class Chat:
                         continue
                     a = length
                     b = a + params_infer_code.stream_speed
-                    if b > wavs.shape[1]:
-                        b = wavs.shape[1]
+                    b = min(b, wavs.shape[1])
                     new_wavs = wavs[:, a:b]
                     length = b
                     yield new_wavs
@@ -511,7 +514,7 @@ class Chat:
     @torch.inference_mode()
     def _decode_to_wavs(
         self,
-        result_list: List[torch.Tensor],
+        result_list: list[torch.Tensor],
         use_decoder: bool,
     ):
         decoder = self.decoder if use_decoder else self.dvae
@@ -519,8 +522,7 @@ class Chat:
         if len(result_list) == 0:
             return np.array([], dtype=np.float32)
         for result in result_list:
-            if result.size(0) > max_x_len:
-                max_x_len = result.size(0)
+            max_x_len = max(max_x_len, result.size(0))
         batch_result = torch.zeros(
             (len(result_list), result_list[0].size(1), max_x_len),
             dtype=result_list[0].dtype,
@@ -528,7 +530,8 @@ class Chat:
         )
         for i in range(len(result_list)):
             src = result_list[i]
-            batch_result[i].narrow(1, 0, src.size(0)).copy_(src.permute(1, 0))
+            if src.size(0) > 0:
+                batch_result[i].narrow(1, 0, src.size(0)).copy_(src.permute(1, 0))
             del src
         del_all(result_list)
         mel_specs = decoder(batch_result)
@@ -540,7 +543,7 @@ class Chat:
     @torch.no_grad()
     def _infer_code(
         self,
-        text: Tuple[List[str], str],
+        text: tuple[list[str], str],
         stream: bool,
         device: torch.device,
         return_hidden: bool,
